@@ -63,8 +63,8 @@ public class RunSequenceAlignment {
         }
     }
 
-    private static void alignSequences(String firstSeq, String secondSeq, int gap, PrintWriter out, BiFunction<Character, Character, Integer> scoreFunction) {
-        int match, delete, insert, n = firstSeq.length(), m = secondSeq.length();
+    public static void alignSequences(String firstSeq, String secondSeq, int gap, PrintWriter out, BiFunction<Character, Character, Integer> scoreFunction) {
+        int match, delete, insert, n = firstSeq.length() + 1, m = secondSeq.length() + 1;
         int[][] score = new int[n][m];
 
         // Этап 1. Формирование матрицы скора для каждой пары префиксов A, B
@@ -86,7 +86,7 @@ public class RunSequenceAlignment {
         for (int i = 1; i < n; i++) {
             for (int j = 1; j < m; j++) {
                 // скор совпадения - диагональный элемент + скор функция для текущей клетки
-                match = score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i), secondSeq.charAt(j));
+                match = score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i - 1), secondSeq.charAt(j - 1));
                 // скор удаления - левый элемент + штраф за гэп
                 delete = score[i - 1][j] + gap;
                 // скор вставки - верхний элемент + штраф за гэп
@@ -94,6 +94,8 @@ public class RunSequenceAlignment {
                 score[i][j] = max(max(match, delete), insert);
             }
         }
+
+//        printTable(out, score);
 
         // Этап 2. Восстанавливаем по матрице выравнивание
 //        StringBuilder firstBuilder = new StringBuilder(), secondBuilder = new StringBuilder();
@@ -105,27 +107,43 @@ public class RunSequenceAlignment {
             Двигаемся с правой нижней ячейки в левую верхнюю (из score[n-1][m-1] в score[0][0]),
             посмотрев на скор соседних ячеек (слева - удаление, сверху - вставка, с по диагонали - совпадение)
             определяем с помощью какого действия (вставка, удаление, совпданение получено выравнивания для текущей ячейки.
-            Поняв какое деуствие дало правильное выравнивание префиксов, выполним его -> получимновую строку.
+            Поняв какое действие дало правильное выравнивание префиксов, выполним его -> получимн овую строку.
          */
         while(i > 0 || j > 0) {
-            // получили такой скор при совпадении, выполняем соотв. операцию в строках -> получаем новое выравнивание
-            if(i > 0 && j > 0 && score[i][j] == score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i), secondSeq.charAt(j))) {
-                firstBuilder.insert(0, firstSeq.charAt(i));
-                secondBuilder.insert(0, secondSeq.charAt(j));
+            // совпадение
+            if(i > 0 && j > 0 && score[i][j] == score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i - 1), secondSeq.charAt(j - 1))) {
+                firstBuilder.insert(0, firstSeq.charAt(i - 1));
+                secondBuilder.insert(0, secondSeq.charAt(j - 1));
                 i--; j--;
+            // удаление
             } else if(i > 0 && score[i][j] == score[i - 1][j] + gap) {
-                firstBuilder.insert(0, firstSeq.charAt(i));
+                firstBuilder.insert(0, firstSeq.charAt(i - 1));
                 secondBuilder.insert(0, '_');
                 i--;
+            // вставка
             } else if(j > 0 && score[i][j] == score[i][j - 1] + gap) {
                 firstBuilder.insert(0, '_');
-                secondBuilder.insert(0, secondSeq.charAt(j));
+                secondBuilder.insert(0, secondSeq.charAt(j - 1));
                 j--;
             }
         }
 
         // выводим полученный скор и вырванивание
         printAlignmentAndScore(score[n - 1][m - 1], firstBuilder.toString(), secondBuilder.toString(), out);
+    }
+
+    private static void printTable(PrintWriter out, int[][] score) {
+        int m = score[0].length;
+        int n = score.length;
+
+        out.println("Score matrix: \n");
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                out.printf(" %s ", score[i][j]);
+            }
+            out.println();
+        }
     }
 
 
