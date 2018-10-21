@@ -19,9 +19,12 @@ public class RunSequenceAlignment {
         try {
             String firstSeq, secondSeq;
 
+            // Обрабатываем аргумменты командной строки ( помощью библиотеки Apache Commons CLI)
             CommandLine cmd = initCommandLine(args);
+            // По распознаным опциям формируем конфигурацию будущего выравнивания
             AlignmentConfiguration conf = alignConfigFromCmd(cmd);
 
+            // Инициализируем поток вывода
             PrintWriter outWriter = conf.getAlignmentFile() == null
                     ? new PrintWriter(System.out, true)
                     : new PrintWriter(conf.getAlignmentFile());
@@ -31,6 +34,8 @@ public class RunSequenceAlignment {
 
             BiFunction<Character, Character, Integer> scoreFunction;
 
+            // если нужно выравнить последовательность аминокислот, используем скоринг функцию blosum62, если нуклеотидов - dnaFul
+            // иначе - выдаем ошибку.
             if(conf.getCompound() == 'a' && NWUtils.isAminoAcidsSequence(firstSeq) && NWUtils.isAminoAcidsSequence(secondSeq)) {
                 System.out.println("Type: amino acid");
                 scoreFunction = NWUtils::blosum62;
@@ -42,6 +47,7 @@ public class RunSequenceAlignment {
                 return;
             }
 
+            // запускам выравнивание с заданными параметрами
             alignSequences(firstSeq, secondSeq, conf.getGap(), outWriter, scoreFunction);
 
         } catch (ParseException | ConfigurationException e) {
@@ -69,6 +75,11 @@ public class RunSequenceAlignment {
             score[0][j] = gap * j;
         }
 
+/*
+        Возможны три вида операции: сопадение, удаление, вставка.
+        Исходя из смысла составляемой матрицы
+         (в ячейке (i, j) находится оптимальный скор перфиксов строк S1[i], S2[j]): можем записать:
+*/
         for (int i = 1; i < n; i++) {
             for (int j = 1; j < m; j++) {
                 // скор совпадения - диагональный элемент + скор функция для текущей клетки
@@ -87,7 +98,14 @@ public class RunSequenceAlignment {
         StringBuilder secondBuilder = new StringBuilder();
         int i = n - 1, j = m - 1;
 
+        /*
+            Двигаемся с правой нижней ячейки в левую верхнюю (из score[n-1][m-1] в score[0][0]),
+            посмотрев на скор соседних ячеек (слева - удаление, сверху - вставка, с по диагонали - совпадение)
+            определяем с помощью какого действия (вставка, удаление, совпданение получено выравнивания для текущей ячейки.
+            Поняв какое деуствие дало правильное выравнивание префиксов, выполним его -> получимновую строку.
+         */
         while(i > 0 || j > 0) {
+            // получили такой скор при совпадении, отображаем соотв. операцию в
             if(i > 0 && j > 0 && score[i][j] == score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i), secondSeq.charAt(j))) {
                 firstBuilder.insert(0, firstSeq.charAt(i));
                 secondBuilder.insert(0, secondSeq.charAt(j));
@@ -103,7 +121,6 @@ public class RunSequenceAlignment {
             }
         }
 
-        System.out.println("Length of aligned sequences: " + firstBuilder.toString().length());
 
         printAlignmentAndScore(score[n - 1][m - 1], firstBuilder.toString(), secondBuilder.toString(), out);
     }
@@ -209,54 +226,6 @@ public class RunSequenceAlignment {
         }
 
         return conf;
-    }
-
-    private static class AlignmentConfiguration {
-        private char compound;
-        private String firstSeqFile, secondSeqFile;
-
-        public void setAlignmentFile(String alignmentFile) {
-            this.alignmentFile = alignmentFile;
-        }
-
-        private String alignmentFile;
-
-        public AlignmentConfiguration(char compound, String firstSeqFile, String secondSeqFile, int gap) {
-            this.compound = compound;
-            this.firstSeqFile = firstSeqFile;
-            this.secondSeqFile = secondSeqFile;
-            this.alignmentFile = alignmentFile;
-            this.gap = gap;
-        }
-
-        public AlignmentConfiguration(char compound, String firstSeqFile, String secondSeqFile, String alignmentFile) {
-            this.compound = compound;
-            this.firstSeqFile = firstSeqFile;
-            this.secondSeqFile = secondSeqFile;
-            this.alignmentFile = alignmentFile;
-        }
-
-        private int gap = -10;
-
-        public char getCompound() {
-            return compound;
-        }
-
-        public String getFirstSeqFile() {
-            return firstSeqFile;
-        }
-
-        public String getSecondSeqFile() {
-            return secondSeqFile;
-        }
-
-        public String getAlignmentFile() {
-            return alignmentFile;
-        }
-
-        public int getGap() {
-            return gap;
-        }
     }
 
     private static Optional<Integer> parseInt(String toParse) {
