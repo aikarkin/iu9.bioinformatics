@@ -21,38 +21,41 @@ public class RunSequenceAlignment {
 
             // Обрабатываем аргумменты командной строки ( помощью библиотеки Apache Commons CLI)
             CommandLine cmd = initCommandLine(args);
-            // По распознаным опциям формируем конфигурацию будущего выравнивания
-            AlignmentConfiguration conf = alignConfigFromCmd(cmd);
 
-            // Инициализируем поток вывода
-            PrintWriter outWriter = conf.getAlignmentFile() == null
-                    ? new PrintWriter(System.out, true)
-                    : new PrintWriter(conf.getAlignmentFile());
+            if(cmd != null) {
+                // По распознаным опциям формируем конфигурацию будущего выравнивания
+                AlignmentConfiguration conf = alignConfigFromCmd(cmd);
 
-            firstSeq = readInputSequence(conf.getFirstSeqFile());
-            secondSeq = readInputSequence(conf.getSecondSeqFile());
+                // Инициализируем поток вывода
+                PrintWriter outWriter = conf.getAlignmentFile() == null
+                        ? new PrintWriter(System.out, true)
+                        : new PrintWriter(conf.getAlignmentFile());
 
-            BiFunction<Character, Character, Integer> scoreFunction;
+                firstSeq = readInputSequence(conf.getFirstSeqFile());
+                secondSeq = readInputSequence(conf.getSecondSeqFile());
 
-            // если нужно выравнить последовательность аминокислот, используем скоринг функцию blosum62, если нуклеотидов - dnaFul
-            // иначе - выдаем ошибку.
-            if(conf.getCompound() == 'a' && NWUtils.isAminoAcidsSequence(firstSeq) && NWUtils.isAminoAcidsSequence(secondSeq)) {
-                System.out.println("Type: amino acid");
-                scoreFunction = NWUtils::blosum62;
-            } else if(conf.getCompound() == 'n' && NWUtils.isNucleotideSequence(firstSeq) && NWUtils.isNucleotideSequence(secondSeq)) {
-                System.out.println("Type: nucleotide");
-                scoreFunction = NWUtils::dnaFull;
-            } else {
-                System.err.println("[error] Invalid input sequence");
-                return;
+                BiFunction<Character, Character, Integer> scoreFunction;
+
+                // если нужно выравнить последовательность аминокислот, используем скоринг функцию blosum62, если нуклеотидов - dnaFul
+                // иначе - выдаем ошибку.
+                if (conf.getCompound() == 'a' && NWUtils.isAminoAcidsSequence(firstSeq) && NWUtils.isAminoAcidsSequence(secondSeq)) {
+                    System.out.println("Type: amino acid");
+                    scoreFunction = NWUtils::blosum62;
+                } else if (conf.getCompound() == 'n' && NWUtils.isNucleotideSequence(firstSeq) && NWUtils.isNucleotideSequence(secondSeq)) {
+                    System.out.println("Type: nucleotide");
+                    scoreFunction = NWUtils::dnaFull;
+                } else {
+                    System.err.println("[error] Invalid input sequence");
+                    return;
+                }
+
+                // запускам выравнивание с заданными параметрами
+                alignSequences(firstSeq, secondSeq, conf.getGap(), outWriter, scoreFunction);
             }
 
-            // запускам выравнивание с заданными параметрами
-            alignSequences(firstSeq, secondSeq, conf.getGap(), outWriter, scoreFunction);
-
-        } catch (ParseException | ConfigurationException e) {
+        } catch (ConfigurationException e) {
             String msg = e.getMessage();
-            System.err.printf("[error] Invalid command line arguments%s.\n", (msg == null || msg.length() == 0) ? "" : ": " + msg);
+            System.err.printf("[error] Invalid alignment configuration %s.\n", (msg == null || msg.length() == 0) ? "" : ": " + msg);
         } catch (IOException e) {
             String msg = e.getMessage();
             e.printStackTrace();
@@ -105,7 +108,7 @@ public class RunSequenceAlignment {
             Поняв какое деуствие дало правильное выравнивание префиксов, выполним его -> получимновую строку.
          */
         while(i > 0 || j > 0) {
-            // получили такой скор при совпадении, отображаем соотв. операцию в
+            // получили такой скор при совпадении, выполняем соотв. операцию в строках -> получаем новое выравнивание
             if(i > 0 && j > 0 && score[i][j] == score[i - 1][j - 1] + scoreFunction.apply(firstSeq.charAt(i), secondSeq.charAt(j))) {
                 firstBuilder.insert(0, firstSeq.charAt(i));
                 secondBuilder.insert(0, secondSeq.charAt(j));
@@ -121,7 +124,7 @@ public class RunSequenceAlignment {
             }
         }
 
-
+        // выводим полученный скор и вырванивание
         printAlignmentAndScore(score[n - 1][m - 1], firstBuilder.toString(), secondBuilder.toString(), out);
     }
 
@@ -152,9 +155,16 @@ public class RunSequenceAlignment {
         return new String(Files.readAllBytes(Paths.get(filepath)));
     }
 
-    private static CommandLine initCommandLine(String[] args) throws ParseException {
+    private static CommandLine initCommandLine(String[] args) {
         Options cmdOptions = new Options();
 
+        cmdOptions.addOption(
+            Option.builder("h")
+                .longOpt("help")
+                .desc("Print help message")
+                .hasArg(false)
+                .build()
+        );
         cmdOptions.addOption(
                 Option.builder("i")
                         .longOpt("input")
@@ -185,13 +195,24 @@ public class RunSequenceAlignment {
         cmdOptions.addOption(
                 Option.builder()
                         .argName("o")
+                        .desc("If provided match output file path with result alignment and score.")
                         .longOpt("output")
                         .hasArg()
                         .type(String.class)
                         .build()
         );
 
-        return new DefaultParser().parse(cmdOptions, args);
+        CommandLine cmd = null;
+        try {
+             cmd = new DefaultParser().parse(cmdOptions, args);
+
+        } catch (ParseException e) {
+            String msg = e.getMessage();
+            System.err.printf("[error] Invalid command line arguments%s.\n", (msg == null || msg.length() == 0) ? "" : ": " + msg);
+            HelpFormatter formatter = new HelpFormatter();
+            formatter.printHelp( "align", cmdOptions, true);
+        }
+        return cmd;
     }
 
     private static AlignmentConfiguration alignConfigFromCmd(CommandLine cmd) throws ConfigurationException {

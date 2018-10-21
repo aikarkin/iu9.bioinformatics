@@ -83,7 +83,6 @@ public class NWUtils {
     }
 
     public static int blosum62(char a, char b) {
-        System.out.println("a = [" + a + "], b = [" + b + "]");
         int i = AC_CH_TO_IDX.get(a),
                 j = AC_CH_TO_IDX.get(b);
         return BLOSUM62_MATRIX[i][j];
