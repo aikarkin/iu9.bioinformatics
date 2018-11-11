@@ -20,6 +20,8 @@ public class RunSequenceAlignment {
     }
 
     public static void main(String[] args) {
+        PrintWriter outWriter = null;
+
         try {
             String firstSeq, secondSeq;
 
@@ -31,7 +33,7 @@ public class RunSequenceAlignment {
                 AlignmentConfiguration conf = alignConfigFromCmd(cmd);
 
                 // Инициализируем поток вывода
-                PrintWriter outWriter = conf.getAlignmentFile() == null
+                outWriter = conf.getAlignmentFile() == null
                         ? new PrintWriter(System.out, true)
                         : new PrintWriter(conf.getAlignmentFile());
 
@@ -43,10 +45,10 @@ public class RunSequenceAlignment {
                 // если нужно выравнить последовательность аминокислот, используем скоринг функцию blosum62, если нуклеотидов - dnaFul
                 // иначе - выдаем ошибку.
                 if (conf.getCompound() == 'a' && NWUtils.isAminoAcidsSequence(firstSeq) && NWUtils.isAminoAcidsSequence(secondSeq)) {
-                    System.out.println("Type: amino acid");
+                    outWriter.println("Compound: amino acid");
                     scoreFunction = NWUtils::blosum62;
                 } else if (conf.getCompound() == 'n' && NWUtils.isNucleotideSequence(firstSeq) && NWUtils.isNucleotideSequence(secondSeq)) {
-                    System.out.println("Type: nucleotide");
+                    outWriter.println("Compound: nucleotide");
                     scoreFunction = NWUtils::dnaFull;
                 } else {
                     System.err.println("[error] Invalid input sequence");
@@ -64,6 +66,10 @@ public class RunSequenceAlignment {
             String msg = e.getMessage();
             e.printStackTrace();
             System.err.printf("[error] Unable to read file%s.\n", (msg == null || msg.length() == 0) ? "" : ": " + msg);
+        } finally {
+            if(outWriter != null) {
+                outWriter.close();
+            }
         }
     }
 
@@ -110,34 +116,36 @@ public class RunSequenceAlignment {
 
         StringBuilder firstBuilder = new StringBuilder();
         StringBuilder secondBuilder = new StringBuilder();
-        int i = n - 1, j = m - 1;
+        int i = n - 1, j = m - 1, score;
+//        System.out.println("match matrix: ");
+//        printTable(out, matrix_m);
+//        System.out.println("insert matrix: ");
+//        printTable(out, matrix_i);
+//        System.out.println("delete matrix: ");
+//        printTable(out, matrix_d);
 
         while(i > 0 || j > 0) {
-            int optimalScore = max(matrix_i[i][j], matrix_d[i][j], matrix_m[i][j]);
+            score = max(matrix_i[i][j], matrix_d[i][j], matrix_m[i][j]);
 
-            // match/mismatch
-            if (i > 0 && j > 0 && optimalScore == matrix_m[i][j]) {
-                System.out.print("match");
+            // insert
+            if(j > 0 && score == matrix_i[i][j]) {
+                firstBuilder.insert(0, '_');
+                secondBuilder.insert(0, secondSeq.charAt(j - 1));
+                j--;
+            } // match/mismatch
+            else if (i > 0 && j > 0 && score == matrix_m[i][j]) {
                 firstBuilder.insert(0, firstSeq.charAt(i - 1));
                 secondBuilder.insert(0, secondSeq.charAt(j - 1));
                 i--; j--;
             // delete
-            } else if(i > 0 && optimalScore == matrix_d[i][j]) {
-                System.out.print("delete");
+            } else if(i > 0 && score == matrix_d[i][j]) {
                 firstBuilder.insert(0, firstSeq.charAt(i - 1));
                 secondBuilder.insert(0, '_');
                 i--;
-            // insert
-            } else if(j > 0 && optimalScore == matrix_i[i][j]) {
-                System.out.print("insert");
-                firstBuilder.insert(0, '_');
-                secondBuilder.insert(0, secondSeq.charAt(j - 1));
-                j--;
             }
-            System.out.println(" " + optimalScore);
         }
 
-        int score = max(matrix_i[n - 1][m - 1], matrix_d[n - 1][m - 1], matrix_m[n - 1][m - 1]);
+        score = max(matrix_i[n - 1][m - 1], matrix_d[n - 1][m - 1], matrix_m[n - 1][m - 1]);
 
         printAlignmentAndScore(score, firstBuilder.toString(), secondBuilder.toString(), out);
     }
@@ -146,14 +154,20 @@ public class RunSequenceAlignment {
         int m = score[0].length;
         int n = score.length;
 
-        out.println("Score matrix: \n");
-
+        out.print("\t\t");
+        for (int i = 0; i < m; i++) {
+            out.print("  " + i);
+        }
+        out.println("\n" + new String(new char[n*9]).replace("\0", "_"));
         for (int i = 0; i < n; i++) {
+            out.print(i + "\t:\t");
             for (int j = 0; j < m; j++) {
-                out.printf(" %s ", score[i][j]);
+                out.printf("%s\t", score[i][j]);
             }
             out.println();
         }
+
+        out.println(new String(new char[n*9]).replace("\0", "#"));
     }
 
 
@@ -186,6 +200,7 @@ public class RunSequenceAlignment {
     private static CommandLine initCommandLine(String[] args) {
         Options cmdOptions = new Options();
 
+
         cmdOptions.addOption(
             Option.builder("h")
                 .longOpt("help")
@@ -211,7 +226,7 @@ public class RunSequenceAlignment {
                         .build()
         );
         cmdOptions.addOption(
-                Option.builder("o")
+                Option.builder()
                         .longOpt("open")
                         .desc("Fine of open gap.")
                         .hasArg()
@@ -231,9 +246,8 @@ public class RunSequenceAlignment {
                         .build()
         );
         cmdOptions.addOption(
-                Option.builder()
-                        .argName("a")
-                        .desc("If provided match output alignment file path with result alignment and score.")
+                Option.builder("o")
+                        .desc("If provided match output file path with result alignment and score.")
                         .longOpt("output")
                         .hasArg()
                         .type(String.class)
@@ -272,8 +286,8 @@ public class RunSequenceAlignment {
             throw new ConfigurationException("Invalid compound '" + compound + "'. Compound may has values 'a' or 'n'." );
         }
 
-        open = parseInt(cmd.getOptionValue('o')).orElse(-10);
-        extend = parseInt(cmd.getOptionValue("g")).orElse(-1);
+        open = parseInt(cmd.getOptionValue("open")).orElse(-10);
+        extend = parseInt(cmd.getOptionValue("e")).orElse(-1);
 
         if(open > 0) {
             throw new ConfigurationException("Invalid open value. It should be negative integer");
@@ -285,8 +299,8 @@ public class RunSequenceAlignment {
 
         AlignmentConfiguration conf = new AlignmentConfiguration(compound.charAt(0), seq1File, seq2File, open, extend);
 
-        if(cmd.hasOption('a')) {
-            conf.setAlignmentFile(cmd.getOptionValue('a'));
+        if(cmd.hasOption('o')) {
+            conf.setAlignmentFile(cmd.getOptionValue('o'));
         }
 
         return conf;

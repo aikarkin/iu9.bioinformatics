@@ -3,12 +3,12 @@ class AlignmentConfiguration {
     private String firstSeqFile, secondSeqFile;
     private int open = -10;
     private int extend = -1;
+    private String alignmentFile;
 
     public void setAlignmentFile(String alignmentFile) {
         this.alignmentFile = alignmentFile;
     }
 
-    private String alignmentFile;
 
     public AlignmentConfiguration(char compound, String firstSeqFile, String secondSeqFile, int open, int extend) {
         this.compound = compound;
@@ -46,4 +46,6 @@ class AlignmentConfiguration {
     public int getOpen() {
         return open;
     }
+
+
 }
